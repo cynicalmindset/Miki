@@ -27,7 +27,8 @@ export function sechdulereminder(minute,message){
     reminders.push({fireAt, message})
     savereminders(reminders);
     setTimeout(() => {
-  console.log(`\n[REMINDER] ${message}\n`);
+    console.log(`\n${message} nigga\n`);
+    
 }, minute * 60_000);
 return `Reminder set for ${minute} minutes from now: ${message}`;
 }
