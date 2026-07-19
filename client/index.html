@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>miki</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+
+  body {
+    background: #08080a;
+    color: #e4e4ea;
+    font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+    display: flex;
+  }
+
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+  }
+
+  .greeting {
+    width: 100%;
+    max-width: 640px;
+    font-size: 15px;
+    color: #67676f;
+    margin-bottom: 20px;
+  }
+  .greeting span { color: #7dd3fc; }
+
+  .log {
+    width: 100%;
+    max-width: 640px;
+    margin-bottom: 24px;
+    font-size: 15px;
+    line-height: 1.9;
+  }
+  .log .line { opacity: 0; animation: fadein 0.3s forwards; }
+  .log .you { color: #67676f; }
+  .log .miki { color: #e4e4ea; }
+  @keyframes fadein { to { opacity: 1; } }
+
+  .promptbar {
+    width: 100%;
+    max-width: 640px;
+    display: flex;
+    align-items: center;
+    font-size: 16px;
+  }
+  .cursor {
+    color: #7dd3fc;
+    margin-right: 10px;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .promptbar input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #e4e4ea;
+    font-family: inherit;
+    font-size: inherit;
+  }
+  .promptbar input::placeholder { color: #444; }
+
+  .side {
+    width: 260px;
+    background: #111114;
+    border-left: 1px solid #1c1c22;
+    padding: 0 28px;
+    font-size: 12.5px;
+    line-height: 2;
+    color: #67676f;
+  }
+  .side .block {
+    padding: 24px 0;
+    border-bottom: 1px solid #1c1c22;
+  }
+  .side .block:last-child { border-bottom: none; }
+  .side .label { color: #3a5a68; text-transform: lowercase; margin-bottom: 4px; }
+  .side .cmd { color: #7dd3fc; display: block; }
+  .side a { color: #67676f; text-decoration: none; }
+  .side a:hover { color: #e4e4ea; }
+
+  @media (max-width: 860px) {
+    html, body { height: auto; min-height: 100%; }
+    body { flex-direction: column; }
+    .main { padding: 28px 20px; justify-content: flex-start; flex: none; }
+    .side {
+      width: 100%;
+      border-left: none;
+      border-top: 1px solid #1c1c22;
+      padding: 0 20px;
+    }
+    .greeting, .log, .promptbar { max-width: 100%; }
+  }
+
+  @media (max-width: 480px) {
+    .greeting, .promptbar { font-size: 14px; }
+    .side { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="main">
+    <div class="greeting"><span>&gt;</span> hi, its miki here.</div>
+
+    <div class="log" id="log"></div>
+
+    <div class="promptbar">
+      <span class="cursor">&gt;</span>
+      <input id="input" type="text" placeholder="" autofocus />
+    </div>
+  </div>
+
+  <div class="side">
+    <div class="block">
+      <div class="label">$ project</div>
+      miki<br />
+      local ai companion<br />
+      qwen3:8b &middot; ollama
+    </div>
+
+    <div class="block">
+      <div class="label">$ creator</div>
+      yash
+    </div>
+
+    <div class="block">
+      <div class="label">$ socials</div>
+      <a href="#">github</a><br />
+      <a href="#">twitter</a><br />
+      <a href="#">instagram</a>
+    </div>
+
+    <div class="block">
+      <div class="label">$ commands</div>
+      <span class="cmd">remember that &lt;fact&gt;</span>
+      <span class="cmd">remind me to X in N min</span>
+      <span class="cmd">countdown Nh</span>
+      <span class="cmd">stopwatch</span>
+      <span class="cmd">add date X on YYYY-MM-DD</span>
+      <span class="cmd">due</span>
+      <span class="cmd">servo yes / servo no</span>
+    </div>
+  </div>
+
+<script>
+  const log = document.getElementById("log");
+  const input = document.getElementById("input");
+
+  function addLine(text, cls) {
+    const div = document.createElement("div");
+    div.className = "line " + cls;
+    div.textContent = text;
+    log.appendChild(div);
+  }
+
+  async function sendMessage(text) {
+    addLine(text, "you");
+    try {
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
+      const data = await res.json();
+      addLine(data.reply, "miki");
+    } catch (e) {
+      addLine(e.message, "you");
+    }
+  }
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && input.value.trim()) {
+      const text = input.value.trim();
+      input.value = "";
+      sendMessage(text);
+    }
+  });
+</script>
+
+</body>
+</html>
