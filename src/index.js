@@ -73,30 +73,61 @@ function stripEmojis(text) {
   return text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F900}-\u{1F9FF}]/gu, "").trim();
 }
 
+
+
+async function detectUser(history) {
+    const faceDetected = await checkFace();
+
+    if (!faceDetected) {
+        console.log("face not found");
+        return;
+        
+    }
+
+    const greeting = stripEmojis(
+        await askChat([
+            ...history,
+            {
+                role: "user",
+                content: "the user just walked in and you noticed them, greet them"
+            }
+        ])
+    );
+
+    console.log(greeting);
+    await display(greeting);
+    await display("servo yes");
+}
+
+
+
 export async function main(){
     const memrory = loadmemory();
+    // detectUser()
     const history = [
             { role: "system", content: SYSTEM_PROMPT + buildmemorycontext(memrory) }
         ];
 
-    let isPresent = false;
+    await detectUser(history); 
 
-    setInterval(async () => {
-    const faceDetected = await checkFace();
+    // let isPresent = false;
 
-    if (faceDetected && !isPresent) {
-        isPresent = true;
-        const greeting = stripEmojis(await askChat([
-        ...history,
-        { role: "user", content: "the user just walked in and you noticed them, greet them" }
-        ]));
-        console.log(greeting);
-        await display(greeting);
-        await display("servo yes");
-    } else if (!faceDetected) {
-        isPresent = false;
-    }
-    }, 20000); 
+  
+    // const faceDetected = await checkFace();
+
+    // if (faceDetected && !isPresent) {
+    //     isPresent = true;
+    //     const greeting = stripEmojis(await askChat([
+    //     ...history,
+    //     { role: "user", content: "the user just walked in and you noticed them, greet them" }
+    //     ]));
+    //     console.log(greeting);
+    //     await display(greeting);
+    //     await display("servo yes");
+    // } else if (!faceDetected) {
+    //     isPresent = false;
+    // }
+    
 
     while(true){
         const text = await rl.question("> ");
