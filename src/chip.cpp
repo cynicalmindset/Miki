@@ -3,15 +3,37 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <esp_camera.h>
+
+#define PWDN_GPIO_NUM     32
+#define RESET_GPIO_NUM    -1
+#define XCLK_GPIO_NUM      0
+#define SIOD_GPIO_NUM     26
+#define SIOC_GPIO_NUM     27
+#define Y9_GPIO_NUM       35
+#define Y8_GPIO_NUM       34
+#define Y7_GPIO_NUM       39
+#define Y6_GPIO_NUM       36
+#define Y5_GPIO_NUM       21
+#define Y4_GPIO_NUM       19
+#define Y3_GPIO_NUM       18
+#define Y2_GPIO_NUM        5
+#define VSYNC_GPIO_NUM    25
+#define HREF_GPIO_NUM     23
+#define PCLK_GPIO_NUM     22
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_SDA 13
 #define OLED_SCL 2
 
-int ref_eye_height = 40;
-int ref_eye_width = 40;
-int ref_space_between_eye = 10;
+
+#define SERVO_PIN 14
+#define SERVO_CHANNEL 4
+
+int ref_eye_height = 35;
+int ref_eye_width = 30;
+int ref_space_between_eye = 6;
 int ref_corner_radius = 10;
 int left_eye_height = ref_eye_height;
 int left_eye_width = ref_eye_width;
@@ -30,6 +52,44 @@ WebServer server(80);
 
 const char* ssid     = "14685";
 const char* password = "yash14685";
+
+void handleStream() {
+  WiFiClient client = server.client();
+
+  String boundary = "frame";
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-Type: multipart/x-mixed-replace; boundary=" + boundary);
+  client.println();
+
+  while (client.connected()) {
+    camera_fb_t* fb = esp_camera_fb_get();
+    if (!fb) {
+      break;
+    }
+
+    uint8_t* jpgBuf = NULL;
+    size_t jpgLen = 0;
+    bool converted = frame2jpg(fb, 80, &jpgBuf, &jpgLen);
+    esp_camera_fb_return(fb);
+
+    if (!converted) {
+      break;
+    }
+
+    client.println("--" + boundary);
+    client.println("Content-Type: image/jpeg");
+    client.println("Content-Length: " + String(jpgLen));
+    client.println();
+    client.write(jpgBuf, jpgLen);
+    client.println();
+
+    free(jpgBuf);
+
+    if (!client.connected()) {
+      break;
+    }
+  }
+}
 
 void draw_eyes(bool update = true) {
   display.clearDisplay();
@@ -108,6 +168,78 @@ void happy_eye() {
   display.display();
   delay(1000);
 }
+
+bool initCamera() {
+  camera_config_t config;
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer = LEDC_TIMER_0;
+  config.pin_d0 = Y2_GPIO_NUM;
+  config.pin_d1 = Y3_GPIO_NUM;
+  config.pin_d2 = Y4_GPIO_NUM;
+  config.pin_d3 = Y5_GPIO_NUM;
+  config.pin_d4 = Y6_GPIO_NUM;
+  config.pin_d5 = Y7_GPIO_NUM;
+  config.pin_d6 = Y8_GPIO_NUM;
+  config.pin_d7 = Y9_GPIO_NUM;
+  config.pin_xclk = XCLK_GPIO_NUM;
+  config.pin_pclk = PCLK_GPIO_NUM;
+  config.pin_vsync = VSYNC_GPIO_NUM;
+  config.pin_href = HREF_GPIO_NUM;
+  config.pin_sscb_sda = SIOD_GPIO_NUM;
+  config.pin_sscb_scl = SIOC_GPIO_NUM;
+  config.pin_pwdn = PWDN_GPIO_NUM;
+  config.pin_reset = RESET_GPIO_NUM;
+  config.xclk_freq_hz = 20000000;
+  config.pixel_format = PIXFORMAT_RGB565;
+  config.frame_size = FRAMESIZE_QVGA;
+  config.fb_count = 1;
+
+  esp_err_t err = esp_camera_init(&config);
+  return err == ESP_OK;
+}
+
+void handleCapture() {
+  camera_fb_t* fb = esp_camera_fb_get();
+  if (!fb) {
+    server.send(500, "text/plain", "Camera capture failed");
+    return;
+  }
+
+  uint8_t* jpgBuf = NULL;
+  size_t jpgLen = 0;
+  bool converted = frame2jpg(fb, 80, &jpgBuf, &jpgLen);
+
+  esp_camera_fb_return(fb);
+
+  if (!converted) {
+    server.send(500, "text/plain", "JPEG conversion failed");
+    return;
+  }
+
+  server.send_P(200, "image/jpeg", (const char*)jpgBuf, jpgLen);
+  free(jpgBuf);
+}
+
+void nodYes() {
+  for (int i = 0; i < 2; i++) {
+    servoWrite(60);
+    delay(300);
+    servoWrite(120);
+    delay(300);
+  }
+  servoWrite(90);
+}
+
+void shakeNo() {
+  for (int i = 0; i < 3; i++) {
+    servoWrite(70);
+    delay(150);
+    servoWrite(110);
+    delay(150);
+  }
+  servoWrite(90);
+}
+
 
 void scrollDisplay(String lines[], int lineCount) {
   for (int i = 0; i < lineCount; i += 2) {
@@ -191,12 +323,31 @@ void handleRoot() {
 
 void handleUpdate() {
   if (server.hasArg("msg")) {
-    showText(server.arg("msg"));
+    String msg = server.arg("msg");
+
+    if (msg.indexOf("servo yes") != -1) {
+      nodYes();
+    }
+    if (msg.indexOf("servo no") != -1) {
+      shakeNo();
+    }
+
+    showText(msg);
     center_eyes(true);
-    lastBlinkTime = millis(); // reset blink timer so it doesn't blink right after a message
+    lastBlinkTime = millis();
   }
   server.sendHeader("Location", "/");
   server.send(303);
+}
+
+void initServo() {
+  ledcAttach(SERVO_PIN, 50, 16); // pin, frequency (Hz), resolution (bits)
+}
+
+void servoWrite(int angle) {
+  int pulseWidth = map(angle, 0, 180, 500, 2400);
+  int duty = (int)((pulseWidth / 20000.0) * 65536);
+  ledcWrite(SERVO_PIN, duty); // pin instead of channel
 }
 
 void setup() {
@@ -218,9 +369,19 @@ void setup() {
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 
+  if (!initCamera()) {
+    Serial.println("Camera init failed");
+  } else {
+    Serial.println("Camera OK");
+  }
+
   server.on("/", handleRoot);
   server.on("/update", HTTP_POST, handleUpdate);
+  server.on("/capture", handleCapture);
+  server.on("/stream", handleStream);
   server.begin();
+
+  initServo();
 
   wakeup();
   lastBlinkTime = millis();

@@ -8,10 +8,13 @@ import { getTime } from "./tools/time.js"
 import {checkduedates, addduedate} from "./tools/duedate.js"
 import {loadmemory, buildmemorycontext,addmemory} from "./memory.js"
 import {startCountdown, startStopwatch} from "./tools/timer.js"
+import { checkFace } from "./tools/facecheck.js";
 
 const rl = readline.createInterface({ input, output });
 
-export function routecommand(text){
+// let ispresent = false;
+
+export async function routecommand(text){
     const t = text.toLowerCase().trim();
     if (t.includes("what time") || t.includes("current time") || t.startsWith("time")) {
          return getTime();
@@ -57,8 +60,14 @@ if (t.startsWith("remind me")) {
   }
   return "Say it like: remind me to <thing> in <N> minutes.";
 }
+
+if (t === "servo yes" || t === "servo no") {
+    await display(t);
+    return "ok.";
+}
+
     return null;
-} 
+}
 
 function stripEmojis(text) {
   return text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F900}-\u{1F9FF}]/gu, "").trim();
@@ -69,6 +78,26 @@ export async function main(){
     const history = [
             { role: "system", content: SYSTEM_PROMPT + buildmemorycontext(memrory) }
         ];
+
+    let isPresent = false;
+
+    setInterval(async () => {
+    const faceDetected = await checkFace();
+
+    if (faceDetected && !isPresent) {
+        isPresent = true;
+        const greeting = stripEmojis(await askChat([
+        ...history,
+        { role: "user", content: "the user just walked in and you noticed them, greet them" }
+        ]));
+        console.log(greeting);
+        await display(greeting);
+        await display("servo yes");
+    } else if (!faceDetected) {
+        isPresent = false;
+    }
+    }, 20000); 
+
     while(true){
         const text = await rl.question("> ");
         // if(text=="exit"){
@@ -82,7 +111,7 @@ export async function main(){
             continue;
         }
         try{
-        const toolres = routecommand(text);
+        const toolres = await routecommand(text);
         let reply;
         const MAX_HISTORY = 10;
         if(toolres !== null){
