@@ -122,8 +122,7 @@ async function detectUser(history) {
 
     if (!faceDetected) {
         console.log("face not found");
-        return;
-        
+        return;       
     }
 
     const greeting = stripEmojis(
