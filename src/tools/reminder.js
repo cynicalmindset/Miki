@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { display } from "../display.js";
 
 import { REMINDERS_FILE } from "../config.js";
 // import { loadEnvFile } from "node:process";
@@ -27,8 +28,11 @@ export function sechdulereminder(minute,message){
     reminders.push({fireAt, message})
     savereminders(reminders);
     setTimeout(() => {
-    console.log(`\n${message} nigga\n`);
+    //console.log(`\n${message} nigga\n`);
+    return display(`\n${message} nigga\n`);
     
 }, minute * 60_000);
-return `Reminder set for ${minute} minutes from now: ${message}`;
+
+
+return `${message} in ${minute}`;
 }
