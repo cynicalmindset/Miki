@@ -1,7 +1,7 @@
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { SYSTEM_PROMPT } from "./config.js";
-import { ask } from "./llm.js";
+import { ask, askChat } from "./llm.js";
 import {display} from "./display.js"
 import {sechdulereminder } from "./tools/reminder.js"
 import { getTime } from "./tools/time.js"
@@ -60,24 +60,44 @@ if (t.startsWith("remind me")) {
     return null;
 } 
 
+function stripEmojis(text) {
+  return text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F900}-\u{1F9FF}]/gu, "").trim();
+}
 
 export async function main(){
     const memrory = loadmemory();
+    const history = [
+            { role: "system", content: SYSTEM_PROMPT + buildmemorycontext(memrory) }
+        ];
     while(true){
         const text = await rl.question("> ");
         // if(text=="exit"){
         //     break;
         // }
+        const lower = text.toLowerCase();
+        if(lower.startsWith("remember that")){
+            const fact = text.split(/that/i).slice(1).join("that").trim();
+            addmemory(memrory, fact);
+            console.log(`Saved to memory: ${fact}`);
+            continue;
+        }
         try{
         const toolres = routecommand(text);
         let reply;
+        const MAX_HISTORY = 10;
         if(toolres !== null){
             reply = toolres;
             // console.log(reply);
             await display(reply);
         }else{
-        reply = await ask(text, SYSTEM_PROMPT);
-        // console.log(reply);
+        history[0].content = SYSTEM_PROMPT + buildmemorycontext(memrory);
+        history.push({ role: "user", content: text });
+        if (history.length > MAX_HISTORY + 1) {
+             history.splice(1, history.length - 1 - MAX_HISTORY);
+        }
+        reply = stripEmojis(await askChat(history));
+        history.push({ role: "assistant", content: reply });
+        console.log(reply);
         await display(reply);
         }
         }catch(e){

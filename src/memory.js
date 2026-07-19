@@ -1,5 +1,5 @@
 import fs from "node:fs"
-import { MEMORY_FILE } from "./config"
+import { MEMORY_FILE } from "./config.js"
 
 export function loadmemory(){
     if(fs.existsSync(MEMORY_FILE)){
